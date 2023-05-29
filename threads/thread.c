@@ -40,6 +40,10 @@ static struct lock tid_lock;
 /* Thread destruction requests */
 static struct list destruction_req;
 
+/* sleep 상태 스레드 리스트 추가 */
+static struct list sleep_list;
+static int64_t global_tick;
+
 /* Statistics. */
 static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
@@ -109,6 +113,8 @@ thread_init (void) {
 	lock_init (&tid_lock);
 	list_init (&ready_list);
 	list_init (&destruction_req);
+	list_init (&sleep_list); /* sleep 스레드들 연결 리스트 초기화 */
+	global_tick = INT64_MAX;
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
@@ -587,4 +593,52 @@ allocate_tid (void) {
 	lock_release (&tid_lock);
 
 	return tid;
+}
+
+/* timer_sleep(ticks)에서 인자로 받은 ticks를 기존의 next_tick_to_awake와 비교하면서 더 작은 값으로 바꿔준다. */
+void update_global_tick(int64_t ticks){
+	global_tick = (global_tick > ticks) ? ticks : global_tick;
+}
+
+int64_t get_global_tick(void){
+	return global_tick;
+}
+/* ticks 변수는 께울시간*/
+void thread_sleep(int64_t ticks){
+	struct thread* cur = thread_current();
+
+	enum intr_level old_level;
+	
+	ASSERT(!intr_context());
+	old_level = intr_disable();
+
+	/* idle 스레드라면 종료 */
+	ASSERT(cur!=idle_thread);
+	cur->wakeup_tick = ticks;
+	update_global_tick(cur->wakeup_tick);
+	list_push_back(&sleep_list, &cur->elem);
+
+	thread_block();
+
+	intr_set_level(old_level);
+}
+
+void thread_awake(int64_t ticks){
+	struct list_elem* cur = list_begin(&sleep_list);
+	struct thread* t;
+
+	while(cur != list_end(&sleep_list)){
+		t = list_entry(cur,struct thread,elem);
+
+		if(ticks>=t->wakeup_tick){
+			cur = list_remove(&t->elem);
+			thread_unblock(t);
+		}
+		else{
+			/*다음 element불러오기*/
+			cur = list_next(cur);
+			update_global_tick(t->wakeup_tick);
+		}
+
+	}
 }
