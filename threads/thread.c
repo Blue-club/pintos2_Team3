@@ -213,6 +213,13 @@ thread_create (const char *name, int priority,
 	/* Add to run queue. */
 	thread_unblock (t);
 
+	/* 현재 실행중인 thread와 우선순위를 비교하여, 새로 생성된
+	thread의 우선순위가 높다면 thread_yield()를 통해 CPU를 양보.*/
+	if(t->priority > thread_current()->priority){
+		thread_yield();
+	}
+
+
 	return tid;
 }
 
@@ -246,7 +253,9 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
+	// list_push_back (&ready_list, &t->elem);
+	/* 우선 순위로 정렬하기위해 필요한 cmp_priority가 포함된 list_insert_ordered함수로 변경*/
+	list_insert_ordered(&ready_list, &t->elem, &cmp_priority, NULL);
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
@@ -309,7 +318,9 @@ thread_yield (void) {
 
 	old_level = intr_disable ();
 	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
+		// list_push_back (&ready_list, &curr->elem);
+		/* 우선 순위로 정렬하기위해 필요한 cmp_priority가 포함된 list_insert_ordered함수로 변경*/
+		list_insert_ordered(&ready_list, &curr->elem, &cmp_priority, NULL);
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
@@ -318,6 +329,32 @@ thread_yield (void) {
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
+	test_max_priority();
+
+}
+
+void
+test_max_priority(void){
+	/* 가장 높은 우선순위는 정렬된 ready_list에서의 첫번째 값*/
+	
+	struct thread* max_thread = list_entry(list_begin(&ready_list),struct thread, elem);
+
+	if(thread_current()->priority < max_thread->priority){
+		thread_yield();
+	}
+}
+
+bool 
+cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED){
+	struct thread* thread_a = list_entry(a,struct thread, elem);	
+	struct thread* thread_b = list_entry(b,struct thread, elem);	
+
+	if(thread_a->priority > thread_b->priority){
+		return 1;
+	}
+	else{
+		return 0;
+	}
 }
 
 /* Returns the current thread's priority. */
@@ -415,6 +452,9 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+	t->init_priority = priority;
+	t->wait_lock = NULL;
+	list_init(&t->donation);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

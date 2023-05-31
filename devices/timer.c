@@ -145,7 +145,7 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 	thread_tick ();
 
 	/*next_tick_to_awake와 비교하여 깨워야 할 스레드가 sleep_list에있을때만 깨운다.*/
-	if(get_next_tick_to_awake()<=ticks){
+	if(get_global_tick()<=ticks){
 		thread_awake(ticks);
 	}
 }
