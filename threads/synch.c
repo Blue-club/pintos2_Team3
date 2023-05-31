@@ -194,24 +194,22 @@ lock_acquire (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
-
-	sema_down (&lock->semaphore);
-
+	
+	/*현재 lock_acquire을 실행하는 스레드*/
 	struct thread* cur = thread_current();
 	/*lock의 holder가 존재할때*/
-	if(lock->holder != NULL){
+	if(lock->holder){
 		/*wait_lock에 lock 저장*/
 		cur->wait_lock = lock;
-		/*lock의 현재 holder의 대기자 list추가*/
-		list_insert_ordered(&lock->holder->donation, &cur->donation_elem,donate_priority,NULL);
+		/*현재 lock을 소유하고있는(lock->holder)의 donation에 현재 스레드 저장*/
+		list_insert_ordered(&lock->holder->donation, &cur->donation_elem,thread_compare_donate_priority,NULL);
 		donate_priority();
-	}
+	} 
+	sema_down (&lock->semaphore);
+	/*lock을 획득했으므로 wait_lock null로변경*/
+	cur->wait_lock=NULL;
 	/*lock의 holder 갱신*/
 	lock->holder = thread_current();
-}
-void
-donate_priority(void){
-	
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -243,10 +241,17 @@ void
 lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
+	
+	/*priority 빌려준 스레드를 donation 리스트에서 제거하는 함수*/
+	remove_with_lock(lock);
+	/*priority 재설정 함수*/
+	refresh_priority();
 
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
 }
+
+
 
 /* Returns true if the current thread holds LOCK, false
    otherwise.  (Note that testing whether some other thread holds
@@ -257,7 +262,7 @@ lock_held_by_current_thread (const struct lock *lock) {
 
 	return lock->holder == thread_current ();
 }
-
+
 /* One semaphore in a list. */
 struct semaphore_elem {
 	struct list_elem elem;              /* List element. */

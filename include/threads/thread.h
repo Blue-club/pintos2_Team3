@@ -96,9 +96,9 @@ struct thread {
 	struct list_elem elem;              /* List element. */
 	/* wakeup tick : 깨어나야 할 시각 */
 	int64_t wakeup_tick;
-	/* priority 초기화위한 필드*/
+	/* priority 초기화위한 필드, 우선 순위 기부받고 반납할 때 자신의 우선순위를 알아야함*/
 	int init_priority;
-	/* 쓰레드 대기하는 lock 필드  */
+	/* 쓰레드가 대기하고있는 lock 필드  */
 	struct lock *wait_lock;
 	/* multiple donation 리스트 및 elem*/
 	struct list donation;
@@ -142,9 +142,11 @@ const char *thread_name (void);
 
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
-
+bool thread_compare_donate_priority (const struct list_elem *, 
+				const struct list_elem *, void *);
 int thread_get_priority (void);
 void thread_set_priority (int);
+void donate_priority(void);
 
 int thread_get_nice (void);
 void thread_set_nice (int);
@@ -153,6 +155,7 @@ int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
 void test_max_priority (void);
-bool cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
-
+bool cmp_priority (const struct list_elem *, const struct list_elem *, void *);
+void remove_with_lock (struct lock *lock);
+void refresh_priority (void);
 #endif /* threads/thread.h */
