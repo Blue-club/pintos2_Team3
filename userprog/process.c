@@ -50,6 +50,11 @@ process_create_initd (const char *file_name) {
 		return TID_ERROR;
 	strlcpy (fn_copy, file_name, PGSIZE);
 
+	
+	char *parsing;
+	/*file_name을 받아와서 null 기준으로 문자열 파싱*/
+	strtok_r(file_name," ", &parsing);
+
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
@@ -164,7 +169,7 @@ int
 process_exec (void *f_name) {
 	char *file_name = f_name;
 	bool success;
-
+	
 	/* We cannot use the intr_frame in the thread structure.
 	 * This is because when current thread rescheduled,
 	 * it stores the execution information to the member. */
@@ -176,8 +181,28 @@ process_exec (void *f_name) {
 	/* We first kill the current context */
 	process_cleanup ();
 
+	/*parsing한 인자를 담을 argu배열의 길이는 pintos제한 128바이트*/
+	char *argu[128];
+	char *token, *parsing;
+	int cnt = 0;
+	/* strtok_r 함수를 통해서 첫 번째로 얻은 값을 token에 저장, 나머지를 parsing에 저장 */
+	/* token이 NULL일때까지 반복 */
+	/* strtok_r 함수에 NULL값을 받아온다면 이전 호출 이후의 남은 문자열에서 토큰을 찾음, 따라서 token에는 다음 문자 저장*/
+	for(token=strtok_r(file_name," ",&parsing);token!=NULL; token=strtok_r(NULL," ",&parsing))
+	{
+		argu[cnt++]=token;
+	}
+
 	/* And then load the binary */
 	success = load (file_name, &_if);
+
+	
+	argument_stack(argu,cnt,&_if.rsp);
+	/*if 구조체의 필드값 갱신*/
+	_if.R.rdi=cnt;
+	_if.R.rsi=(char*)_if.rsp+8;
+	/*_if.rsp를 시작 주소로하여 메모리 덤프를 생성. 메모리 덤프의 크기는 16진수로*/
+	hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)_if.rsp, true);
 
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
@@ -189,7 +214,43 @@ process_exec (void *f_name) {
 	NOT_REACHED ();
 }
 
+void argument_stack(char **argu, int count, void **rsp)
+{
+    // 프로그램 이름, 인자 문자열 push
+    for (int i = count - 1; i > -1; i--)
+    {
+        for (int j = strlen(argu[i]); j > -1; j--)
+        {
+            (*rsp)--;                      // 스택 주소 감소
+            **(char **)rsp = argu[i][j]; // 주소에 문자 저장
+        }
+        argu[i] = *(char **)rsp; 
+    }
 
+    /* 정렬 패딩 push
+	rsp의 값이 8의 배수가 될 때까지 스택에 0 넣어서 패딩맞춰주기*/
+    int padding = (int)*rsp % 8;
+    for (int i = 0; i < padding; i++)
+    {
+        (*rsp)--;
+        **(uint8_t **)rsp = 0; // rsp 직전까지 값 채움
+    }
+
+    // 인자 문자열 종료를 나타내는 0 push
+    (*rsp) -= 8;
+    **(char ***)rsp = 0; // char* 타입의 0 추가
+
+    // 각 인자 문자열의 주소 push
+    for (int i = count - 1; i > -1; i--)
+    {
+        (*rsp) -= 8; // 다음 주소로 이동
+        **(char ***)rsp = argu[i]; // char* 타입의 주소 추가
+    }
+
+    // return address push
+    (*rsp) -= 8;
+    **(void ***)rsp = 0; // void* 타입의 0 추가
+}
 /* Waits for thread TID to die and returns its exit status.  If
  * it was terminated by the kernel (i.e. killed due to an
  * exception), returns -1.  If TID is invalid or if it was not a
@@ -204,6 +265,10 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+	for (int i = 0; i < 100000000; i++)
+  {
+  
+  }
 	return -1;
 }
 

@@ -241,7 +241,7 @@ void
 lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
-	
+
 	/*priority 빌려준 스레드를 donation 리스트에서 제거하는 함수*/
 	remove_with_lock(lock);
 	/*priority 재설정 함수*/
