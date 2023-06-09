@@ -210,6 +210,11 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
+
+	t->fdt = palloc_get_page(PAL_ZERO);
+	if(t->fdt == NULL){
+		return TID_ERROR;
+	}
 	/* Add to run queue. */
 	thread_unblock (t);
 
@@ -217,8 +222,7 @@ thread_create (const char *name, int priority,
 	thread의 우선순위가 높다면 thread_yield()를 통해 CPU를 양보.*/
 	if(t->priority > thread_current()->priority){
 		thread_yield();
-	}
-
+	}	
 
 	return tid;
 }
@@ -484,6 +488,8 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->init_priority = priority;
 	t->wait_lock = NULL;
 	list_init(&t->donation);
+	t->exit_status=0;
+	t->fdidx = 2;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
