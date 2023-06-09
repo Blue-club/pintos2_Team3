@@ -194,20 +194,24 @@ process_exec (void *f_name) {
 	}
 
 	/* And then load the binary */
+	
 	success = load (file_name, &_if);
 
+	if(!success){
+		palloc_free_page(file_name);
+		return -1;
+	}
 	
 	argument_stack(argu,cnt,&_if.rsp);
 	/*if 구조체의 필드값 갱신*/
 	_if.R.rdi=cnt;
 	_if.R.rsi=(char*)_if.rsp+8;
 	/*_if.rsp를 시작 주소로하여 메모리 덤프를 생성. 메모리 덤프의 크기는 16진수로*/
-	hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)_if.rsp, true);
+	// hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)_if.rsp, true);
 
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
-	if (!success)
-		return -1;
+
 
 	/* Start switched process. */
 	do_iret (&_if);
@@ -634,6 +638,54 @@ install_page (void *upage, void *kpage, bool writable) {
 	return (pml4_get_page (t->pml4, upage) == NULL
 			&& pml4_set_page (t->pml4, upage, kpage, writable));
 }
+// 파일 객체에 대한 파일 디스크립터를 생성하는 함수
+int process_add_file(struct file *file) {
+    struct thread *t = thread_current();  // 현재 실행 중인 스레드 구조체
+    struct file **fdt = t->fdt;  // 현재 스레드의 파일 디스크립터 테이블
+    int fd = t->fdidx;  // 현재 스레드의 파일 디스크립터 인덱스
+
+    // 파일 디스크립터 테이블에서 비어있는 위치를 찾아 파일을 추가한다.
+    while (t->fdt[fd] != NULL && fd < FDCOUNT_LIMIT) {
+        fd++;
+    }
+    if (fd >= FDCOUNT_LIMIT) {
+        // 파일 디스크립터 테이블이 가득찬 경우, -1을 반환한다.
+        return -1;
+    }
+
+    t->fdidx = fd;  // 다음 파일에 할당될 파일 디스크립터 인덱스 갱신
+    fdt[fd] = file;  // 파일 객체를 파일 디스크립터 테이블에 추가
+
+    return fd;  // 할당된 파일 디스크립터 반환
+}
+
+// 주어진 파일 디스크립터를 사용하여 스레드의 파일 테이블에서 파일 객체를 찾아 반환하는 함수
+struct file *process_get_file(int fd) {
+    // 파일 디스크립터가 유효한 범위를 벗어나면 NULL을 반환
+    if (fd < 0 || fd >= FDCOUNT_LIMIT) {
+        return NULL;
+    }
+
+    // 현재 실행 중인 스레드의 정보를 가져옴
+    struct thread *t = thread_current();
+    // 현재 스레드의 파일 테이블을 가져옴
+    struct file **fdt = t->fdt;
+
+    // 파일 테이블에서 주어진 파일 디스크립터에 해당하는 파일 객체를 가져옴
+    struct file *file = fdt[fd];
+
+    // 찾은 파일 객체를 반환
+    return file;
+}
+// 파일 디스크립터 테이블에서 파일 객체를 제거하는 함수
+void process_close_file(int fd)
+{
+	struct thread *curr = thread_current();
+	struct file **fdt = curr->fdt;
+	if (fd < 2 || fd >= FDCOUNT_LIMIT)
+		return NULL;
+	fdt[fd] = NULL;
+}
 #else
 /* From here, codes will be used after project 3.
  * If you want to implement the function for only project 2, implement it on the
@@ -702,3 +754,5 @@ setup_stack (struct intr_frame *if_) {
 	return success;
 }
 #endif /* VM */
+
+

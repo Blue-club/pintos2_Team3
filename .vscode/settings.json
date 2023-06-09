@@ -1,5 +1,8 @@
 {
     "files.associations": {
-        "intr-stubs.h": "c"
+        "intr-stubs.h": "c",
+        "*.inc": "c",
+        "synch.h": "c",
+        "thread.h": "c"
     }
 }

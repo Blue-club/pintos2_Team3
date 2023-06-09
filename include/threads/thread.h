@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+#include "threads/synch.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -27,6 +28,10 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+
+
+#define FDT_PAGES 2
+#define FDCOUNT_LIMIT 128
 
 /* A kernel thread or user process.
  *
@@ -103,7 +108,9 @@ struct thread {
 	/* multiple donation 리스트 및 elem*/
 	struct list donation;
 	struct list_elem donation_elem;
-	
+	int exit_status;  // exit() 또는 wait() 구현에 사용되는 변수
+	struct file **fdt;  // 파일 디스크립터 테이블
+	int fdidx;  // 파일 디스크립터 인덱스
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -117,6 +124,8 @@ struct thread {
 	/* Owned by thread.c. */
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
+
+	
 };
 
 /* If false (default), use round-robin scheduler.
