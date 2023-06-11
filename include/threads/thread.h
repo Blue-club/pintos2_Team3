@@ -22,6 +22,7 @@ enum thread_status {
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
 typedef int tid_t;
+typedef int pid_t;
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
 
 /* Thread priorities. */
@@ -30,9 +31,8 @@ typedef int tid_t;
 #define PRI_MAX 63                      /* Highest priority. */
 
 
-#define FDT_PAGES 2
-#define FDCOUNT_LIMIT 128
-
+#define FDT_PAGES 3
+#define FDCOUNT_LIMIT 128 // limit fdidx
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The
@@ -111,6 +111,14 @@ struct thread {
 	int exit_status;  // exit() 또는 wait() 구현에 사용되는 변수
 	struct file **fdt;  // 파일 디스크립터 테이블
 	int fdidx;  // 파일 디스크립터 인덱스
+	struct intr_frame parent_if;
+	struct list child_list; 
+    struct list_elem child_elem; 
+
+	struct semaphore load_sema;
+	struct semaphore exit_sema; 
+	struct semaphore wait_sema;  
+	struct file *running;
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -119,13 +127,13 @@ struct thread {
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;
+	void *rsp;
+
 #endif
 
 	/* Owned by thread.c. */
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
-
-	
 };
 
 /* If false (default), use round-robin scheduler.

@@ -191,7 +191,7 @@ thread_create (const char *name, int priority,
 	ASSERT (function != NULL);
 
 	/* Allocate thread. */
-	t = palloc_get_page (PAL_ZERO);
+	t = palloc_get_page(PAL_ZERO);
 	if (t == NULL)
 		return TID_ERROR;
 
@@ -210,11 +210,11 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
-
-	t->fdt = palloc_get_page(PAL_ZERO);
-	if(t->fdt == NULL){
+	list_push_back(&thread_current()->child_list, &t->child_elem);
+	t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
+	if (t->fdt == NULL)
 		return TID_ERROR;
-	}
+
 	/* Add to run queue. */
 	thread_unblock (t);
 
@@ -222,7 +222,8 @@ thread_create (const char *name, int priority,
 	thread의 우선순위가 높다면 thread_yield()를 통해 CPU를 양보.*/
 	if(t->priority > thread_current()->priority){
 		thread_yield();
-	}	
+	}
+
 
 	return tid;
 }
@@ -374,7 +375,7 @@ thread_yield (void) {
 	if (curr != idle_thread)
 		// list_push_back (&ready_list, &curr->elem);
 		/* 우선 순위로 정렬하기위해 필요한 cmp_priority가 포함된 list_insert_ordered함수로 변경*/
-		list_insert_ordered(&ready_list, &curr->elem, &cmp_priority, NULL);
+		list_insert_ordered(&ready_list, &curr->elem, cmp_priority, NULL);
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
@@ -489,7 +490,11 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->wait_lock = NULL;
 	list_init(&t->donation);
 	t->exit_status=0;
-	t->fdidx = 2;
+	t->fdidx =2;
+	list_init(&(t->child_list));
+	sema_init(&t->load_sema, 0);
+	sema_init(&t->exit_sema, 0);
+    sema_init(&t->wait_sema, 0);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -614,7 +619,7 @@ do_schedule(int status) {
 		struct thread *victim =
 			list_entry (list_pop_front (&destruction_req), struct thread, elem);
 		palloc_free_page(victim);
-	}
+		}
 	thread_current ()->status = status;
 	schedule ();
 }
