@@ -2,6 +2,11 @@
 #define VM_VM_H
 #include <stdbool.h>
 #include "threads/palloc.h"
+#include "lib/kernel/hash.h"
+
+uint64_t hash_func (const struct hash_elem *e, void *aux);
+bool less_func (const struct hash_elem *a, const struct hash_elem *b, void *aux);
+
 
 enum vm_type {
 	/* page not initialized */
@@ -44,7 +49,8 @@ struct page {
 	const struct page_operations *operations;
 	void *va;              /* Address in terms of user space */
 	struct frame *frame;   /* Back reference for frame */
-
+	
+	struct hash_elem hash_elem;  //해시 테이블 사용하기위한 요소추가
 	/* Your implementation */
 
 	/* Per-type data are binded into the union.
@@ -65,6 +71,12 @@ struct frame {
 	struct page *page;
 };
 
+struct file_loader{
+	struct file *file;
+	size_t page_read_bytes;
+	size_t page_zero_bytes;
+	off_t ofs;
+};
 /* The function table for page operations.
  * This is one way of implementing "interface" in C.
  * Put the table of "method" into the struct's member, and
@@ -85,6 +97,8 @@ struct page_operations {
  * We don't want to force you to obey any specific design for this struct.
  * All designs up to you for this. */
 struct supplemental_page_table {
+	// 페이지 정보를 저장하는 해시 테이블
+	struct hash pages;
 };
 
 #include "threads/thread.h"

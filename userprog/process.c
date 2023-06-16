@@ -18,6 +18,8 @@
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
+#include "filesys/file.h"
+
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -159,6 +161,7 @@ __do_fork (void *aux) {
 	/* 1. Read the cpu context to local stack. */
 	memcpy (&if_, parent_if, sizeof (struct intr_frame));
 	if_.R.rax = 0;
+	
 	/* 2. Duplicate PT */
 	current->pml4 = pml4_create();
 	if (current->pml4 == NULL)
@@ -237,6 +240,7 @@ process_exec (void *f_name) {
 
 	/* And then load the binary */
 	success = load (file_name, &_if);
+	printf("Success value: %d\n", success);
 
 	if(!success)
 	{
@@ -310,7 +314,7 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
-	 struct thread *child = get_child_process(child_tid);
+	struct thread *child = get_child_process(child_tid);
     if (child == NULL) // 1) 자식이 아니면 -1을 반환한다.
         return -1;
 
@@ -456,9 +460,11 @@ load (const char *file_name, struct intr_frame *if_) {
 	int i;
 
 	/* Allocate and activate page directory. */
+	
 	t->pml4 = pml4_create ();
 	if (t->pml4 == NULL)
 		goto done;
+	
 	process_activate (thread_current ());
 
 	/* Open executable file. */
@@ -479,7 +485,7 @@ load (const char *file_name, struct intr_frame *if_) {
 		printf ("load: %s: error loading executable\n", file_name);
 		goto done;
 	}
-
+	
 	/* Read program headers. */
 	file_ofs = ehdr.e_phoff;
 	for (i = 0; i < ehdr.e_phnum; i++) {
@@ -505,6 +511,7 @@ load (const char *file_name, struct intr_frame *if_) {
 			case PT_SHLIB:
 				goto done;
 			case PT_LOAD:
+				
 				if (validate_segment (&phdr, file)) {
 					bool writable = (phdr.p_flags & PF_W) != 0;
 					uint64_t file_page = phdr.p_offset & ~PGMASK;
@@ -532,12 +539,12 @@ load (const char *file_name, struct intr_frame *if_) {
 				break;
 		}
 	}
-
+	
 	// 스레드가 삭제될 때 파일을 닫을 수 있게 구조체에 파일을 저장해둔다.
 	t->running = file;
 	// 현재 실행중인 파일은 수정할 수 없게 막는다.
 	file_deny_write(file);
-
+	
 	/* Set up stack. */
 	if (!setup_stack (if_))
 		goto done;
@@ -631,6 +638,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT (ofs % PGSIZE == 0);
 
 	file_seek (file, ofs);
+	
 	while (read_bytes > 0 || zero_bytes > 0) {
 		/* Do calculate how to fill this page.
 		 * We will read PAGE_READ_BYTES bytes from FILE
@@ -701,6 +709,7 @@ install_page (void *upage, void *kpage, bool writable) {
 			&& pml4_set_page (t->pml4, upage, kpage, writable));
 }
 
+#else
 
 // 자식 리스트에서 원하는 프로세스를 검색하는 함수
 struct thread *get_child_process(int pid)
@@ -719,7 +728,6 @@ struct thread *get_child_process(int pid)
 	return NULL;
 }
 
-#else
 
 
 /* From here, codes will be used after project 3.
@@ -729,9 +737,30 @@ struct thread *get_child_process(int pid)
 static bool
 lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: Load the segment from the file */
+	struct file_loader *file_loader = (struct file_loader*)aux;
+	struct file *file = file_loader->file;
+	off_t ofs = file_loader->ofs;
+	uint8_t *upage = page->va;
+	uint32_t page_read_bytes = file_loader->page_read_bytes;
+	uint32_t page_zero_bytes = file_loader->page_zero_bytes;
+	
+
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
+
+	file_seek(file,ofs);
+	if(file_read(file,page->frame->kva,page_read_bytes) != (int)page_read_bytes){
+		palloc_free_page(page->frame->kva);
+		
+		return false;
+	}
+
+	memset (page->frame->kva + page_read_bytes, 0, page_zero_bytes);
+
+	
+	return true;
 }
+
 
 /* Loads a segment starting at offset OFS in FILE at address
  * UPAGE.  In total, READ_BYTES + ZERO_BYTES bytes of virtual
@@ -753,7 +782,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
-
 	while (read_bytes > 0 || zero_bytes > 0) {
 		/* Do calculate how to fill this page.
 		 * We will read PAGE_READ_BYTES bytes from FILE
@@ -762,10 +790,17 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		void *aux = NULL;
+		struct file_loader *file_loader = malloc(sizeof(struct file_loader));
+		file_loader->page_read_bytes = page_read_bytes;
+		file_loader->page_zero_bytes = page_zero_bytes;
+		file_loader->ofs = ofs;
+		file_loader->file = file;
+
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
-					writable, lazy_load_segment, aux))
+					writable, lazy_load_segment, file_loader)){
+			free(file_loader);
 			return false;
+		}
 
 		/* Advance. */
 		read_bytes -= page_read_bytes;
@@ -776,17 +811,21 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 }
 
 /* Create a PAGE of stack at the USER_STACK. Return true on success. */
-static bool
-setup_stack (struct intr_frame *if_) {
-	bool success = false;
-	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
+static bool setup_stack(struct intr_frame *if_) {
+    bool success = false;
+    void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
 
-	/* TODO: Map the stack on stack_bottom and claim the page immediately.
-	 * TODO: If success, set the rsp accordingly.
-	 * TODO: You should mark the page is stack. */
-	/* TODO: Your code goes here */
+        // Claim the page
+        if (!vm_claim_page(stack_bottom)) {
+            vm_dealloc_page(stack_bottom);
+            return false;
+        }
+        if_->rsp = USER_STACK;
+        success = true;
 
-	return success;
+    return success;
 }
+
+
 #endif /* VM */
 
