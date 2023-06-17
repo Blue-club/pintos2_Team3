@@ -240,7 +240,6 @@ process_exec (void *f_name) {
 
 	/* And then load the binary */
 	success = load (file_name, &_if);
-	printf("Success value: %d\n", success);
 
 	if(!success)
 	{
@@ -747,14 +746,13 @@ lazy_load_segment (struct page *page, void *aux) {
 
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
-
 	file_seek(file,ofs);
+	printf("in lazy - va: %p\n", page->va);
 	if(file_read(file,page->frame->kva,page_read_bytes) != (int)page_read_bytes){
 		palloc_free_page(page->frame->kva);
 		
 		return false;
 	}
-
 	memset (page->frame->kva + page_read_bytes, 0, page_zero_bytes);
 
 	
@@ -795,13 +793,13 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		file_loader->page_zero_bytes = page_zero_bytes;
 		file_loader->ofs = ofs;
 		file_loader->file = file;
-
+		
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
 					writable, lazy_load_segment, file_loader)){
 			free(file_loader);
 			return false;
 		}
-
+		
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
@@ -814,14 +812,22 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 static bool setup_stack(struct intr_frame *if_) {
     bool success = false;
     void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
-
-        // Claim the page
-        if (!vm_claim_page(stack_bottom)) {
-            vm_dealloc_page(stack_bottom);
-            return false;
-        }
-        if_->rsp = USER_STACK;
-        success = true;
+		
+	// Claim the page
+	
+	if(!vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom,true)){
+		printf("load check\n");
+		return false;
+	}
+	
+	if (!vm_claim_page(stack_bottom)) {
+		vm_dealloc_page(stack_bottom);
+		printf("claim check\n");
+		return false;
+	}
+	
+	if_->rsp = USER_STACK;
+	success = true;
 
     return success;
 }

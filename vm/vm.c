@@ -63,6 +63,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
             goto err;
 
 		int ty = VM_TYPE (type);
+		int st = VM_IS_STACK(type);
 		vm_initializer *initializer = NULL;
 		switch(ty){
 			case VM_ANON:
@@ -92,12 +93,13 @@ struct page *
 spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	/* TODO: Fill this function. */
 	// 대상 페이지 생성 및 가상 주소 설정
-	struct page target_page;
-	target_page.va = va;
+	struct page* target_page= malloc(sizeof(struct page));
+	target_page->va = va;
 
 	// 페이지 테이블에서 페이지 검색
-	struct hash_elem *elem = hash_find(&spt->pages, &target_page.hash_elem);
+	struct hash_elem *elem = hash_find(&spt->pages, &target_page->hash_elem);
 
+	free(target_page);
 	// 페이지를 찾은 경우 해당 페이지 반환
 	if (elem != NULL) {
 		struct page *found_page = hash_entry(elem, struct page, hash_elem);
@@ -161,7 +163,7 @@ vm_get_frame (void) {
         return NULL; // 할당 실패 시 NULL 반환
     }
 
-    void *kva = palloc_get_page(PAL_USER);
+    void *kva = palloc_get_page(PAL_USER | PAL_ZERO);
     if (kva == NULL) {
 		PANIC("To do");
         // free(frame); // 할당된 frame 메모리를 해제
@@ -192,7 +194,10 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
-	if(spt_find_page(spt,page->va) == NULL){
+	printf("check page fault %p\n", addr);
+	addr = pg_round_down(addr);
+	page = spt_find_page(spt, addr);
+	if(page == NULL){
 		return false;
 	}
 	return vm_do_claim_page (page);
@@ -214,7 +219,9 @@ vm_claim_page (void *va UNUSED) {
 	struct page *page = spt_find_page(spt, va);
 	/* TODO: Fill this function */
     if (page == NULL) {
-        return false; 
+		page = malloc(sizeof(struct page));
+		page -> va = va;
+        spt_insert_page(spt,page);
     }
 
 	return vm_do_claim_page (page);
@@ -224,6 +231,7 @@ vm_claim_page (void *va UNUSED) {
 static bool
 vm_do_claim_page (struct page *page) {
 	struct frame *frame = vm_get_frame ();
+	struct thread *t = thread_current ();
 
 	/* Set links */
 	frame->page = page;
@@ -232,14 +240,20 @@ vm_do_claim_page (struct page *page) {
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
 	void *page_va = page->va;
     void *frame_pa = frame->kva;
-
     // 현재 스레드의 페이지 테이블에서 페이지의 VA가 매핑되어 있는지 확인합니다.
-    if (pml4_get_page(thread_current()->pml4, page_va) == NULL &&
+    if (pml4_get_page(t->pml4, page_va) == NULL ){
         // 페이지 테이블에 페이지의 VA를 프레임의 PA로 매핑합니다.
-        pml4_set_page(thread_current()->pml4, page_va, frame_pa, true)) {
+        if(pml4_set_page(t->pml4, page_va, frame_pa, true)) {
         // 매핑이 성공하면 디스크로부터 페이지를 프레임으로 스왑 인합니다.
+		printf("check true\n");
+		printf("va: %p, pa : %p\n\n", page_va, frame_pa-KERN_BASE);
+
         return swap_in(page, frame_pa);
+		}
     }
+	printf("check false\n");
+	printf("va: %p, pa : %p\n\n", page_va, frame_pa-KERN_BASE);
+	
 
     return false;
 }
@@ -270,7 +284,7 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 uint64_t hash_func(const struct hash_elem *e, void *aux) {
     const struct page *pg = hash_entry(e, struct page, hash_elem);
 
-    return hash_bytes(&pg->va, sizeof(*pg->va));
+    return hash_bytes(&pg->va, sizeof(void*));
 }
 
 // 비교 함수: 주어진 두 hash_elem 구조체를 사용하여 페이지의 가상 주소를 비교합니다.
