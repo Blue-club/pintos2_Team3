@@ -261,6 +261,7 @@ int read(int fd, void *buffer, unsigned size) {
 int write(int fd, const void *buffer, unsigned size) {
     check_address(buffer);
     struct file *file = process_get_file(fd);
+
     /* 실행된 후 쓰여진 바이트 수를 저장하는 변수 */
     int bytes_written = 0;
  

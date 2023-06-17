@@ -50,7 +50,6 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 	ASSERT (VM_TYPE(type) != VM_UNINIT)
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
-	
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_page (spt, upage) == NULL) {
 		/* TODO: Create the page, fetch the initialier according to the VM type,
@@ -64,7 +63,8 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 		int ty = VM_TYPE (type);
 		int st = VM_IS_STACK(type);
-		vm_initializer *initializer = NULL;
+		// 수정해야 함 (vm_initializer아님)
+		bool (*initializer)(struct page *, enum vm_type, void *);
 		switch(ty){
 			case VM_ANON:
 				initializer = anon_initializer;
@@ -76,6 +76,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
         // Initialize the page using uninit_new
         uninit_new(page, upage, init, type, aux, initializer);
 
+		
         /* Insert the page into the spt. */
         if (!spt_insert_page(spt, page)) {
             free(page);
@@ -94,6 +95,7 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	/* TODO: Fill this function. */
 	// 대상 페이지 생성 및 가상 주소 설정
 	struct page* target_page= malloc(sizeof(struct page));
+	va = pg_round_down(va);
 	target_page->va = va;
 
 	// 페이지 테이블에서 페이지 검색
@@ -194,8 +196,8 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
-	printf("check page fault %p\n", addr);
-	addr = pg_round_down(addr);
+
+	
 	page = spt_find_page(spt, addr);
 	if(page == NULL){
 		return false;
@@ -220,6 +222,9 @@ vm_claim_page (void *va UNUSED) {
 	/* TODO: Fill this function */
     if (page == NULL) {
 		page = malloc(sizeof(struct page));
+		if(page==NULL){
+			return false;
+		}
 		page -> va = va;
         spt_insert_page(spt,page);
     }
@@ -245,14 +250,10 @@ vm_do_claim_page (struct page *page) {
         // 페이지 테이블에 페이지의 VA를 프레임의 PA로 매핑합니다.
         if(pml4_set_page(t->pml4, page_va, frame_pa, true)) {
         // 매핑이 성공하면 디스크로부터 페이지를 프레임으로 스왑 인합니다.
-		printf("check true\n");
-		printf("va: %p, pa : %p\n\n", page_va, frame_pa-KERN_BASE);
 
         return swap_in(page, frame_pa);
 		}
     }
-	printf("check false\n");
-	printf("va: %p, pa : %p\n\n", page_va, frame_pa-KERN_BASE);
 	
 
     return false;
