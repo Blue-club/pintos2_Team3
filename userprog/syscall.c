@@ -110,8 +110,8 @@ void check_address(void *addr)
 	if (!is_user_vaddr(addr)) // 유저 영역이 아니거나 NULL이면 프로세스 종료
 		exit(-1);
 
-	if (pml4_get_page(thread_current()->pml4, addr) == NULL)
-		exit(-1);
+	// if (pml4_get_page(thread_current()->pml4, addr) == NULL)
+	// 	exit(-1);
 }
 
 /* 주소 값이 유저 영역에서 사용하는 주소 값인지 확인 */

@@ -22,6 +22,7 @@
 #include "vm/vm.h"
 
 #define VM
+
 #ifdef VM
 #endif
 static void process_cleanup (void);
@@ -42,7 +43,7 @@ process_init (void) {
  * Notice that THIS SHOULD BE CALLED ONCE. */
 tid_t
 process_create_initd (const char *file_name) {
-	char *fn_copy;
+	char *fn_copy;    
 	tid_t tid;
 
 	/* Make a copy of FILE_NAME.
@@ -753,7 +754,7 @@ lazy_load_segment (struct page *page, void *aux) {
 		return false;
 	}
 	memset (page->frame->kva + page_read_bytes, 0, page_zero_bytes);
-	memcpy (page->va, page->frame->kva,PGSIZE);
+    memcpy (page->va, page->frame->kva,PGSIZE);
 
 	
 	return true;
@@ -814,15 +815,16 @@ static bool setup_stack(struct intr_frame *if_) {
     void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
 		
 	// Claim the page
+	bool writable= is_writable(thread_current()->pml4);
 	
-	if(!vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom,true)){
+	if(!vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom,writable)){
 		return false;
 	}
 	
-	// if (!vm_claim_page(stack_bottom)) {
-	// 	vm_dealloc_page(stack_bottom);
-	// 	return false;
-	// }
+	if (!vm_claim_page(stack_bottom)) {
+		vm_dealloc_page(stack_bottom);
+		return false;
+	}
 	
 	if_->rsp = USER_STACK;
 	success = true;
