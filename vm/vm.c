@@ -54,7 +54,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 	// upage가 이미 사용 중인지 확인합니다.
 	if (spt_find_page (spt, upage) == NULL) {
-
+		
 		// 새로운 페이지 구조체를 동적으로 할당합니다.
 		struct page *page = malloc(sizeof(struct page));
 
@@ -183,6 +183,14 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static void
 vm_stack_growth (void *addr UNUSED) {
+	void* page_addr=pg_round_down(addr);
+	struct page* page = spt_find_page(&thread_current()->spt, page_addr);
+	while(page == NULL){
+		vm_alloc_page(VM_ANON,page_addr, true);
+		vm_claim_page(page_addr);
+		page_addr+= PGSIZE;
+		page = spt_find_page(&thread_current()->spt, page_addr);
+	}
 }
 
 /* Handle the fault on write_protected page */
@@ -199,12 +207,15 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
 
-	
 	page = spt_find_page(spt, addr);
-	if(page == NULL){
-		return false;
+	if(page != NULL){
+		return vm_do_claim_page (page);
+	}else if(addr == thread_current()->rsp-8){
+		if(!user) return false;
+		vm_stack_growth(addr);
+		return true;
 	}
-	return vm_do_claim_page (page);
+	return false;
 }
 
 /* Free the page.

@@ -800,6 +800,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 			return false;
 		}
 		
+		
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;

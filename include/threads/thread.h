@@ -120,6 +120,7 @@ struct thread {
 	struct semaphore wait_sema;  
 	struct file *running;
 	uint64_t *pml4;                     /* Page map level 4 */
+	void *rsp;
 
 
 #ifdef USERPROG
@@ -128,7 +129,6 @@ struct thread {
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;
-	void *rsp;
 
 #endif
 
