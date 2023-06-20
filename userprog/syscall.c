@@ -100,10 +100,10 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		close(f->R.rdi);
         break;
     case SYS_MMAP:
-        do_mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
+        f->R.rax = mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
         break;
     case SYS_MUNMAP:
-        do_munmap(f->R.rdi);
+        munmap(f->R.rdi);
         break;
 	}
 }
@@ -370,4 +370,39 @@ void process_close_file(int fd)
     if (fd < 0 || fd > FDCOUNT_LIMIT)
         return NULL; // 주어진 파일 디스크립터가 유효 범위를 벗어난 경우 함수를 종료합니다.
     fdt[fd] = NULL; // 주어진 파일 디스크립터에 해당하는 인덱스를 NULL로 설정하여 파일 객체를 제거합니다.
+}
+
+void *
+mmap (void *addr, size_t length, int writable, int fd, off_t offset)
+{
+    check_address(addr);
+    struct file* file  = thread_current()->fdt[fd];
+    if(file == NULL || length == 0 || fd == 0 || fd == 1){
+        return MAP_FAILED;
+    }
+    if(addr != pg_round_down(addr) ){
+        return MAP_FAILED;
+    }
+    
+
+    if(spt_find_page(&thread_current()->spt,addr) != NULL){
+        return MAP_FAILED;
+    }
+
+    if (!do_mmap(addr, length, writable, file, offset)){
+        return MAP_FAILED;
+    }
+    // printf("addr %p, rd %p\n", addr, pg_round_down(addr));
+    return addr;
+}
+
+void munmap(void* va){
+    check_address(va);
+    struct page* page = spt_find_page(&thread_current()->spt, va);
+    if(page ==  NULL || page_get_type(page) != VM_FILE) return;
+    if(!page->file.mmap_start) return;
+    lock_acquire(&filesys_lock);
+    do_munmap(va);
+    lock_release(&filesys_lock);
+
 }

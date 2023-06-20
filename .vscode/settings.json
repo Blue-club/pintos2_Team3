@@ -9,6 +9,8 @@
         "mmu.h": "c",
         "debug.h": "c",
         "file.h": "c",
-        "intrinsic.h": "c"
+        "intrinsic.h": "c",
+        "directory.h": "c",
+        "palloc.h": "c"
     }
 }

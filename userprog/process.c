@@ -21,6 +21,7 @@
 #include "filesys/file.h"
 #include "vm/vm.h"
 
+
 #define VM
 
 #ifdef VM
@@ -755,6 +756,7 @@ lazy_load_segment (struct page *page, void *aux) {
 	}
 	memset (page->frame->kva + page_read_bytes, 0, page_zero_bytes);
     memcpy (page->va, page->frame->kva,PGSIZE);
+	// free(file_loader);
 
 	
 	return true;

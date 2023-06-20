@@ -186,7 +186,7 @@ vm_stack_growth (void *addr UNUSED) {
 	void* page_addr=pg_round_down(addr);
 	struct page* page = spt_find_page(&thread_current()->spt, page_addr);
 	while(page == NULL){
-		vm_alloc_page(VM_ANON,page_addr, true);
+		vm_alloc_page(VM_ANON, page_addr, true);
 		vm_claim_page(page_addr);
 		page_addr+= PGSIZE;
 		page = spt_find_page(&thread_current()->spt, page_addr);
@@ -210,8 +210,10 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	page = spt_find_page(spt, addr);
 	if(page != NULL){
 		return vm_do_claim_page (page);
-	}else if(addr == thread_current()->rsp-8){
-		if(!user) return false;
+	}
+	else if(addr == thread_current()->rsp-8){
+		if(!user) 
+			return false;
 		vm_stack_growth(addr);
 		return true;
 	}
@@ -298,7 +300,7 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst, struct su
 			struct file_loader* file_loader = (struct file_loader*)uninit_page->aux;
 			struct file_loader* new_file_loader = malloc(sizeof(struct file_loader));
 			memcpy(new_file_loader, uninit_page->aux, sizeof(struct file_loader));
-			new_file_loader ->file = file_duplicate(file_loader->file);
+			new_file_loader -> file = file_duplicate(file_loader->file);
 			//writable true
 			vm_alloc_page_with_initializer(uninit_page->type,src_page->va,true,uninit_page->init,new_file_loader);
         	vm_claim_page(src_page->va);
