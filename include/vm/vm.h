@@ -24,6 +24,8 @@ enum vm_type {
 	 * markers, until the value is fit in the int. */
 	VM_MARKER_0 = (1 << 3),
 	VM_MARKER_MMAP = (1 << 4),
+	VM_MARKER_CODE = (1 << 5),
+
 
 	/* DO NOT EXCEED THIS VALUE. */
 	VM_MARKER_END = (1 << 31),
@@ -39,9 +41,12 @@ enum vm_type {
 struct page_operations;
 struct thread;
 
+
+
 #define VM_TYPE(type) ((type) & 7)
 #define VM_IS_STACK(type) ((type) & 8)
 #define VM_IS_MMAP(type) ((type) & 16)
+#define VM_IS_CODE(type) ((type) & 32)
 
 /* The representation of "page".
  * This is kind of "parent class", which has four "child class"es, which are
@@ -51,11 +56,13 @@ struct page {
 	const struct page_operations *operations;
 	void *va;              /* Address in terms of user space */
 	struct frame *frame;   /* Back reference for frame */
+	bool seg;
 	
 	struct hash_elem hash_elem;  //해시 테이블 사용하기위한 요소추가
 	struct list_elem mmap_elem;
 	/* Your implementation */
 	struct list* mmap_list;
+	bool writable;
 
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */

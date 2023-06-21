@@ -262,7 +262,6 @@ int read(int fd, void *buffer, unsigned size) {
         bytes_written = file_read(file, buffer, size);
         lock_release(&filesys_lock);
     }
- 
     return bytes_written;
 }
 
@@ -375,17 +374,26 @@ void process_close_file(int fd)
 void *
 mmap (void *addr, size_t length, int writable, int fd, off_t offset)
 {
-    check_address(addr);
     struct file* file  = thread_current()->fdt[fd];
+    void *addr_ = addr;
+    size_t length_ = length;
+    while(true){
+        if(addr_ + length_ == NULL || is_kernel_vaddr(addr_+length_)){
+            return MAP_FAILED;
+        }
+        if(spt_find_page(&thread_current()->spt, addr_) != NULL){
+            return MAP_FAILED;
+        }
+        if(length_<PGSIZE) break;
+        length_ -= PGSIZE;
+    }
+    if(offset % PGSIZE != 0){
+        return MAP_FAILED;
+    }
     if(file == NULL || length == 0 || fd == 0 || fd == 1){
         return MAP_FAILED;
     }
     if(addr != pg_round_down(addr) ){
-        return MAP_FAILED;
-    }
-    
-
-    if(spt_find_page(&thread_current()->spt,addr) != NULL){
         return MAP_FAILED;
     }
 

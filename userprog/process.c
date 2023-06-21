@@ -20,6 +20,7 @@
 #include "intrinsic.h"
 #include "filesys/file.h"
 #include "vm/vm.h"
+#include "vm/file.h"
 
 
 #define VM
@@ -354,10 +355,10 @@ process_exit (void) {
 static void
 process_cleanup (void) {
 	struct thread *curr = thread_current ();
-
 #ifdef VM
 	supplemental_page_table_kill (&curr->spt);
 #endif
+	
 
 	uint64_t *pml4;
 	/* Destroy the current process's page directory and switch back
@@ -796,7 +797,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		file_loader->page_zero_bytes = page_zero_bytes;
 		file_loader->ofs = ofs;
 		file_loader->file = file;
-		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
+		if (!vm_alloc_page_with_initializer (VM_ANON | VM_MARKER_CODE, upage,
 					writable, lazy_load_segment, file_loader)){
 			free(file_loader);
 			return false;
@@ -817,10 +818,8 @@ static bool setup_stack(struct intr_frame *if_) {
     bool success = false;
     void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
 		
-	// Claim the page
-	bool writable= is_writable(thread_current()->pml4);
 	
-	if(!vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom,writable)){
+	if(!vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom,true)){
 		return false;
 	}
 	

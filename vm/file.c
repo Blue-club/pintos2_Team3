@@ -1,8 +1,9 @@
 /* file.c: Implementation of memory backed file object (mmaped object). */
-
 #include "vm/vm.h"
 #include "threads/vaddr.h"
 #include "userprog/process.h"
+#include "threads/mmu.h"
+#include <hash.h>
 #include <list.h>
 
 
@@ -77,7 +78,7 @@ do_mmap (void *addr, size_t length, int writable,
 			return false;
 		}
 		struct page* page = spt_find_page(spt,addr);
-		list_push_back(&mmap_list,&page->mmap_elem);
+		list_push_back(mmap_list,&page->mmap_elem);
 		
 		/* Advance. */
 		length -= page_read_bytes;
@@ -92,31 +93,41 @@ do_mmap (void *addr, size_t length, int writable,
 }
 
 /* Do the munmap */
-void
-do_munmap (void *addr) {
-	struct supplemental_page_table* spt = &thread_current()->spt;
-	struct page* page = spt_find_page(spt, addr);
-	struct list* mmap_list = page->mmap_list;
-	struct file_page* file_page = &page->file;
-	struct file* file = file_page->file;
-	struct list_elem* e;
+void do_munmap(void *addr) {
+    struct supplemental_page_table *spt = &thread_current()->spt;
+    struct page *page = spt_find_page(spt, addr);
+    struct list *mmap_list = page->mmap_list;
+    struct list_elem *e;
 
-	for (e = list_begin (&mmap_list); e != list_end (&mmap_list); e = list_remove (e))
-	{
-		page = list_entry(e, struct page, mmap_elem);
-		if(VM_TYPE(page->operations->type) == VM_UNINIT) {
-			printf("check %p\n",page->operations->type);
-			spt_remove_page(spt, page);
+    struct file *file = NULL; // 파일 포인터 초기화
+    for (e = list_begin(mmap_list); e != list_end(mmap_list); ) {
+        page = list_entry(e, struct page, mmap_elem);
+        if (VM_TYPE(page->operations->type) == VM_UNINIT) {
+            spt_remove_page(spt, page);
+            continue;
+        }
+		if(!pml4_is_dirty(thread_current()->pml4, page->va)){
+			e = list_remove(e);
 			continue;
 		}
-		file_page = &page->file;
-		file_write_at(file, page->frame->kva,file_page->read_bytes,file_page->ofs);
-		// palloc_free_page(page->frame->kva);
-		spt_remove_page(spt, page);
-	}
+        struct file_page *file_page = &page->file;
+        if (file == NULL) {
+            file = file_page->file; // 파일 포인터 갱신
+        }
+
+        file_write_at(file, page->frame->kva, file_page->read_bytes, file_page->ofs);
+		e = list_remove(e);
+        spt_remove_page(spt, page);
+    }
 	free(mmap_list);
-	file_close(file);
+    if (file != NULL) {
+        file_close(file);
+    }
 }
+
+
+
+
 
 
 static bool

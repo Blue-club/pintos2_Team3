@@ -63,6 +63,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 		// 가상 메모리 타입에 따라 초기화자 함수 포인터를 설정합니다.
 		int ty = VM_TYPE (type);
+		bool seg = (VM_IS_CODE(type) == VM_MARKER_CODE);
 		bool (*initializer)(struct page *, enum vm_type, void *);
 		
 		switch(ty){
@@ -72,11 +73,12 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 			case VM_FILE:
 				initializer = file_backed_initializer;
 				break;
-	}
-
+		}
 		// uninit_new 함수를 호출하여 페이지를 초기화합니다.
         uninit_new(page, upage, init, type, aux, initializer);
 
+		page->writable = writable;
+		page->seg = seg;
 
 		 // 페이지를 보조 페이지 테이블에 삽입합니다.
         if (!spt_insert_page(spt, page)) {
@@ -207,10 +209,11 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
-
 	page = spt_find_page(spt, addr);
 	if(page != NULL){
-		return vm_do_claim_page (page);
+		if(!write || page->writable){
+			return vm_do_claim_page (page);
+		}
 	}
 	else if(addr == thread_current()->rsp-8){
 		if(!user) 
@@ -265,7 +268,7 @@ vm_do_claim_page (struct page *page) {
     // 현재 스레드의 페이지 테이블에서 페이지의 VA가 매핑되어 있는지 확인합니다.
     if (pml4_get_page(t->pml4, page_va) == NULL ){
         // 페이지 테이블에 페이지의 VA를 프레임의 PA로 매핑합니다.
-        if(pml4_set_page(t->pml4, page_va, frame_pa, true)) {
+        if(pml4_set_page(t->pml4, page_va, frame_pa, page->writable)) {
         // 매핑이 성공하면 디스크로부터 페이지를 프레임으로 스왑 인합니다.
 
         return swap_in(page, frame_pa);
@@ -316,7 +319,6 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst, struct su
     }
     
     return true;
-
 }
 
 /* Free the resource hold by the supplemental page table */
@@ -331,8 +333,14 @@ void hash_action_destroy(struct hash_elem* hash_elem_, void *aux){
 	struct page* page = hash_entry(hash_elem_, struct page, hash_elem);
 
 	if(page!=NULL){
-	   	destroy(page);
-		free(page);
+		if (VM_TYPE(page->operations->type) == VM_FILE) {
+        	struct file_page *file_page = &page->file;
+			struct file* file = file_page->file; // 파일 포인터 갱신
+			if(file)
+				file_write_at(file, page->frame->kva, file_page->read_bytes, file_page->ofs);
+		}
+		
+	   vm_dealloc_page(page);
 	}
 
 }
@@ -353,3 +361,4 @@ bool less_func(const struct hash_elem *a, const struct hash_elem *b, void *aux) 
 
     return pg_a->va < pg_b->va;
 }
+

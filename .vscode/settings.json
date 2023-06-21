@@ -11,6 +11,7 @@
         "file.h": "c",
         "intrinsic.h": "c",
         "directory.h": "c",
-        "palloc.h": "c"
+        "palloc.h": "c",
+        "pte.h": "c"
     }
 }
