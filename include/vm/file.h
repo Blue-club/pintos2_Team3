@@ -2,6 +2,7 @@
 #define VM_FILE_H
 #include "filesys/file.h"
 #include "vm/vm.h"
+#include <list.h>
 
 struct page;
 enum vm_type;
@@ -12,6 +13,7 @@ struct file_page {
 	uint32_t read_bytes;
     uint32_t zero_bytes;
 	bool mmap_start;
+	struct list_elem elem;
 };
 
 

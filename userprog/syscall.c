@@ -392,7 +392,7 @@ mmap (void *addr, size_t length, int writable, int fd, off_t offset)
     if (!do_mmap(addr, length, writable, file, offset)){
         return MAP_FAILED;
     }
-    // printf("addr %p, rd %p\n", addr, pg_round_down(addr));
+
     return addr;
 }
 

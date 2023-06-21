@@ -53,7 +53,9 @@ struct page {
 	struct frame *frame;   /* Back reference for frame */
 	
 	struct hash_elem hash_elem;  //해시 테이블 사용하기위한 요소추가
+	struct list_elem mmap_elem;
 	/* Your implementation */
+	struct list* mmap_list;
 
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
