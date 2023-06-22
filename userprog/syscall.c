@@ -230,6 +230,7 @@ int read(int fd, void *buffer, unsigned size) {
     // 주어진 buffer의 주소 유효성을 확인
     check_address(buffer);
     check_address(buffer + size - 1);
+    struct page* page = spt_find_page(&thread_current()->spt, buffer);
  
     // buffer를 unsigned char 포인터로 캐스팅하여 사용하기 위한 변수
     unsigned char *buf = buffer;
@@ -258,9 +259,13 @@ int read(int fd, void *buffer, unsigned size) {
         return -1;
     } else {
         // 일반 파일인 경우, 파일을 읽어와서 buffer에 저장하고 읽은 바이트 수를 반환
+        if(page == NULL || !page->writable)
+           exit(-1);
+
         lock_acquire(&filesys_lock);
         bytes_written = file_read(file, buffer, size);
         lock_release(&filesys_lock);
+        
     }
     return bytes_written;
 }

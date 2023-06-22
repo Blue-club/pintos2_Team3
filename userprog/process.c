@@ -756,7 +756,7 @@ lazy_load_segment (struct page *page, void *aux) {
 		return false;
 	}
 	memset (page->frame->kva + page_read_bytes, 0, page_zero_bytes);
-    memcpy (page->va, page->frame->kva,PGSIZE);
+    memcpy (page->va, page->frame->kva, PGSIZE);
 	// free(file_loader);
 
 	

@@ -210,12 +210,13 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
 	page = spt_find_page(spt, addr);
+	
 	if(page != NULL){
 		if(!write || page->writable){
 			return vm_do_claim_page (page);
-		}
+		} 
 	}
-	else if(addr == thread_current()->rsp-8){
+	else if(USER_STACK >= addr && addr >= USER_STACK - (1<<20) && addr == thread_current()->rsp-8){
 		if(!user) 
 			return false;
 		vm_stack_growth(addr);
