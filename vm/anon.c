@@ -80,7 +80,6 @@ anon_swap_out (struct page *page) {
 	for(int i=0; i<8 ; i++){
 		disk_write(swap_disk,swap_anon->sectors[i], page->frame->kva + DISK_SECTOR_SIZE * i);
 	}
-	page->writable = is_writable(pml4e_walk(page->curr->pml4, page->va,0));
 	swap_anon->use = true;
 	anon_page->swap_anon = swap_anon;
 	page->frame = NULL;

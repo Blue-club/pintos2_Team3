@@ -84,6 +84,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		page->writable = writable;
 		page->seg = seg;
 		page->curr = thread_current();
+		page->swap =false;
 		 // 페이지를 보조 페이지 테이블에 삽입합니다.
         if (!spt_insert_page(spt, page)) {
             free(page);
@@ -163,8 +164,7 @@ vm_get_victim (void) {
 	while ((e = list_next (e)) != list_end (&frame_list))
 	{
 		victim=list_entry(e, struct frame, frame_elem);
-		if(victim->page->writable)
-			return victim;
+		return victim;
 	}
 	 /* TODO: The policy for eviction is up to you. */
 	return victim;
@@ -391,7 +391,7 @@ void hash_action_destroy(struct hash_elem* hash_elem_, void *aux){
 	struct page* page = hash_entry(hash_elem_, struct page, hash_elem);
 
 	if(page!=NULL){
-		if (VM_TYPE(page->operations->type) == VM_FILE) {
+		if (VM_TYPE(page->operations->type) == VM_FILE && !page->swap) {
         	struct file_page *file_page = &page->file;
 			struct file* file = file_page->file; // 파일 포인터 갱신
 			if(file)
