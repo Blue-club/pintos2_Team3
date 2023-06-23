@@ -2,6 +2,7 @@
 
 #include "vm/vm.h"
 #include "devices/disk.h"
+#include "threads/mmu.h"
 
 /* DO NOT MODIFY BELOW LINE */
 static struct disk *swap_disk;
@@ -54,7 +55,6 @@ bool
 anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	/* Set up the handler */
 	page->operations = &anon_ops;
-	page->swap = false;
 	struct anon_page *anon_page = &page->anon;
 }
 
@@ -67,19 +67,23 @@ anon_swap_in (struct page *page, void *kva) {
 		disk_read(swap_disk,swap_anon->sectors[i],kva + DISK_SECTOR_SIZE * i);
 	}
 	anon_page->swap_anon = NULL;
+	swap_anon->use = false;
+
 	return true;
 }
 
 /* Swap out the page by writing contents to the swap disk. */
-static bool
+static bool      
 anon_swap_out (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
 	struct swap_anon *swap_anon = find_blank_swap();
 	for(int i=0; i<8 ; i++){
-		disk_write(swap_disk,swap_anon->sectors[i],page->frame->kva + DISK_SECTOR_SIZE * i);
+		disk_write(swap_disk,swap_anon->sectors[i], page->frame->kva + DISK_SECTOR_SIZE * i);
 	}
+	page->writable = is_writable(pml4e_walk(page->curr->pml4, page->va,0));
+	swap_anon->use = true;
 	anon_page->swap_anon = swap_anon;
-	page->frame =NULL;
+	page->frame = NULL;
 	pml4_clear_page(page->curr->pml4, page->va);
 	return true;
 }
@@ -88,6 +92,5 @@ anon_swap_out (struct page *page) {
 static void
 anon_destroy (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
-
 
 }

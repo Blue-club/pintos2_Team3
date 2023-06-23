@@ -64,7 +64,6 @@ struct page {
 	struct list* mmap_list;
 	struct thread* curr;
 	bool writable;
-	bool swap;
 
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */

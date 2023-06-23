@@ -157,7 +157,15 @@ spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 /* Get the struct frame, that will be evicted. */
 static struct frame *
 vm_get_victim (void) {
-	struct frame *victim =list_entry(list_front(&frame_list), struct frame, frame_elem);
+	//일단 해보기 (writable 권한 있는 애들만 제거)
+	struct frame *victim;
+	struct list_elem *e = list_head (&frame_list);
+	while ((e = list_next (e)) != list_end (&frame_list))
+	{
+		victim=list_entry(e, struct frame, frame_elem);
+		if(victim->page->writable)
+			return victim;
+	}
 	 /* TODO: The policy for eviction is up to you. */
 	return victim;
 }
@@ -188,7 +196,6 @@ vm_get_frame (void) {
     if (frame == NULL) {
         return NULL; // 할당 실패 시 NULL 반환
     }
-
 	// 가상 페이지
     void *kva = palloc_get_page(PAL_USER | PAL_ZERO);
     if (kva == NULL) {
@@ -197,6 +204,7 @@ vm_get_frame (void) {
     }else{
 		frame->kva = kva;
 	}
+
 	frame->page = NULL;
 	list_push_back(&frame_list,&frame->frame_elem);
     return frame;
@@ -231,6 +239,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	page = spt_find_page(spt, addr);
 	
 	if(page != NULL){
+		// printf("%p, %d, %d\n" ,addr, page->writable, write);
 		if(!write || page->writable){
 			return vm_do_claim_page (page);
 		} 
@@ -239,7 +248,6 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		vm_stack_growth(addr);
 		return true;
 	}
-		printf("%p\n" ,addr);
 	return false;
 }
 
@@ -287,7 +295,9 @@ static bool
 vm_do_claim_page (struct page *page) {
 	struct frame *frame = vm_get_frame ();
 	struct thread *t = thread_current ();
-
+	// if(VM_TYPE(page->operations->type) == VM_ANON){
+	// 	printf("check\n");
+	// }
 	/* 프레임 구조체, 페이지 구조체 사이의 연결 (set links) */
 	frame->page = page;
 	page->frame = frame;
@@ -302,6 +312,9 @@ vm_do_claim_page (struct page *page) {
 		// 매핑X 면 매핑작업
         if(pml4_set_page(t->pml4, page_va, frame_pa, page->writable)) {
         	// 매핑 성공시, (디스크로부터) 페이지를 프레임으로 swap_in .
+			// if(VM_TYPE(page->operations->type) == VM_ANON){
+			// 	printf("%p, %p\n", frame_pa, page_va);
+			// }
         	return swap_in(page, frame_pa);
 		}
     }
