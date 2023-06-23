@@ -12,6 +12,8 @@
         "intrinsic.h": "c",
         "directory.h": "c",
         "palloc.h": "c",
-        "pte.h": "c"
+        "pte.h": "c",
+        "filesys.h": "c",
+        "inttypes.h": "c"
     }
 }

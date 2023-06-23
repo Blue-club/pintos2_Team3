@@ -345,6 +345,8 @@ process_exit (void) {
     file_close(t->running); // 2) 현재 실행 중인 파일도 닫는다.
 
     process_cleanup();
+	supplemental_page_table_free(&t->spt);
+
 	// 3) 자식이 종료될 때까지 대기하고 있는 부모에게 signal을 보낸다.
     sema_up(&t->wait_sema);
     // 4) 부모의 signal을 기다린다. 대기가 풀리고 나서 do_schedule(THREAD_DYING)이 이어져 다른 스레드가 실행된다.

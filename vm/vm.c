@@ -6,6 +6,9 @@
 #include "include/threads/thread.h"
 #include "threads/mmu.h"
 #include "vm/uninit.h"
+#include <list.h>
+
+struct list frame_list;
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -19,6 +22,7 @@ vm_init (void) {
 	register_inspect_intr ();
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
+	list_init(&frame_list);
 }
 void hash_action_destroy(struct hash_elem* hash_elem, void *aux);
 /* Get the type of the page. This function is useful if you want to know the
@@ -79,7 +83,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 		page->writable = writable;
 		page->seg = seg;
-
+		page->curr = thread_current();
 		 // 페이지를 보조 페이지 테이블에 삽입합니다.
         if (!spt_insert_page(spt, page)) {
             free(page);
@@ -143,9 +147,8 @@ spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
 /* Get the struct frame, that will be evicted. */
 static struct frame *
 vm_get_victim (void) {
-	struct frame *victim = NULL;
+	struct frame *victim =list_entry(list_front(&frame_list), struct frame, frame_elem);
 	 /* TODO: The policy for eviction is up to you. */
-
 	return victim;
 }
 
@@ -153,9 +156,12 @@ vm_get_victim (void) {
  * Return NULL on error.*/
 static struct frame *
 vm_evict_frame (void) {
-	struct frame *victim UNUSED = vm_get_victim ();
+	struct frame *victim = vm_get_victim ();
 	/* TODO: swap out the victim and return the evicted frame. */
-
+	list_remove(&victim->frame_elem);
+	if(swap_out(victim->page)){
+		return victim;
+	}
 	return NULL;
 }
 
@@ -172,14 +178,13 @@ vm_get_frame (void) {
 
     void *kva = palloc_get_page(PAL_USER | PAL_ZERO);
     if (kva == NULL) {
-		PANIC("To do");
-        // free(frame); // 할당된 frame 메모리를 해제
-        // return NULL; // 할당 실패 시 NULL 반환
-    }
-
-    frame->kva = kva;
-    frame->page = NULL;
-
+		free(frame);		
+		frame = vm_evict_frame();
+    }else{
+		frame->kva = kva;
+	}
+	frame->page = NULL;
+	list_push_back(&frame_list,&frame->frame_elem);
     return frame;
 }
 
@@ -217,11 +222,10 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		} 
 	}
 	else if(USER_STACK >= addr && addr >= USER_STACK - (1<<20) && addr == thread_current()->rsp-8){
-		if(!user) 
-			return false;
 		vm_stack_growth(addr);
 		return true;
 	}
+		printf("%p\n" ,addr);
 	return false;
 }
 
@@ -268,10 +272,10 @@ vm_do_claim_page (struct page *page) {
 	
     // 현재 스레드의 페이지 테이블에서 페이지의 VA가 매핑되어 있는지 확인합니다.
     if (pml4_get_page(t->pml4, page_va) == NULL ){
+		
         // 페이지 테이블에 페이지의 VA를 프레임의 PA로 매핑합니다.
         if(pml4_set_page(t->pml4, page_va, frame_pa, page->writable)) {
         // 매핑이 성공하면 디스크로부터 페이지를 프레임으로 스왑 인합니다.
-
         return swap_in(page, frame_pa);
 		}
     }
@@ -330,6 +334,13 @@ supplemental_page_table_kill (struct supplemental_page_table *spt ) {
 	hash_clear(&spt->pages, hash_action_destroy);
 }
 
+void
+supplemental_page_table_free (struct supplemental_page_table *spt ) {
+	/* TODO: Destroy all the supplemental_page_table hold by thread and
+	 * TODO: writeback all the modified contents to the storage. */
+	hash_destroy(&spt->pages, hash_action_destroy);
+}
+
 void hash_action_destroy(struct hash_elem* hash_elem_, void *aux){
 	struct page* page = hash_entry(hash_elem_, struct page, hash_elem);
 
@@ -340,10 +351,13 @@ void hash_action_destroy(struct hash_elem* hash_elem_, void *aux){
 			if(file)
 				file_write_at(file, page->frame->kva, file_page->read_bytes, file_page->ofs);
 		}
-		
-	   vm_dealloc_page(page);
-	}
+		if(page->frame != NULL){
+			free_frame(page->frame);
+			page->frame = NULL;
+		}
 
+	   	vm_dealloc_page(page);
+	}
 }
 
 
@@ -361,5 +375,14 @@ bool less_func(const struct hash_elem *a, const struct hash_elem *b, void *aux) 
     const struct page *pg_b = hash_entry(b, struct page, hash_elem);
 
     return pg_a->va < pg_b->va;
+}
+
+
+//frame의 존재는 함수 호출자에서 확인
+void free_frame(struct frame* frame){
+	list_remove(&frame->frame_elem);
+	pml4_clear_page(thread_current()->pml4, frame->page->va);
+	palloc_free_page(frame->kva);
+	free(frame);
 }
 

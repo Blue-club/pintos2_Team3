@@ -30,7 +30,6 @@ bool
 file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 	/* Set up the handler */
 	page->operations = &file_ops;
-
 	struct file_page *file_page = &page->file;
 	file_page ->mmap_start = VM_IS_MMAP(type);
 }
@@ -103,6 +102,7 @@ void do_munmap(void *addr) {
     for (e = list_begin(mmap_list); e != list_end(mmap_list); ) {
         page = list_entry(e, struct page, mmap_elem);
         if (VM_TYPE(page->operations->type) == VM_UNINIT) {
+			e = list_remove(e);
             spt_remove_page(spt, page);
             continue;
         }
@@ -117,6 +117,9 @@ void do_munmap(void *addr) {
 
         file_write_at(file, page->frame->kva, file_page->read_bytes, file_page->ofs);
 		e = list_remove(e);
+		if(page->frame !=NULL){
+			free_frame(page->frame);
+		}
         spt_remove_page(spt, page);
     }
 	free(mmap_list);

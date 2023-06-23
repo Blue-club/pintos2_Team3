@@ -62,7 +62,9 @@ struct page {
 	struct list_elem mmap_elem;
 	/* Your implementation */
 	struct list* mmap_list;
+	struct thread* curr;
 	bool writable;
+	bool swap;
 
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
@@ -80,7 +82,9 @@ struct page {
 struct frame {
 	void *kva;
 	struct page *page;
+	struct list_elem frame_elem;
 };
+
 
 struct file_loader{
 	struct file *file;
@@ -117,6 +121,7 @@ void supplemental_page_table_init (struct supplemental_page_table *spt);
 bool supplemental_page_table_copy (struct supplemental_page_table *dst,
 		struct supplemental_page_table *src);
 void supplemental_page_table_kill (struct supplemental_page_table *spt);
+void supplemental_page_table_free (struct supplemental_page_table *spt ); 
 struct page *spt_find_page (struct supplemental_page_table *spt,
 		void *va);
 bool spt_insert_page (struct supplemental_page_table *spt, struct page *page);
