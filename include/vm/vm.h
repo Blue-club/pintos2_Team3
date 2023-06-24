@@ -56,13 +56,11 @@ struct page {
 	const struct page_operations *operations;
 	void *va;              /* Address in terms of user space */
 	struct frame *frame;   /* Back reference for frame */
-	bool seg;
 	
 	struct hash_elem hash_elem;  //해시 테이블 사용하기위한 요소추가
 	struct list_elem mmap_elem;
 	/* Your implementation */
-	struct list* mmap_list;
-	struct thread* curr;
+	struct list mmap_list;
 	bool writable;
 	bool swap;
 

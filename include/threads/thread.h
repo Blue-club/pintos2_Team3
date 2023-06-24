@@ -122,6 +122,7 @@ struct thread {
 	struct file *running;
 	uint64_t *pml4;                     /* Page map level 4 */
 	void *rsp;
+	struct supplemental_page_table spt;
 
 
 #ifdef USERPROG
@@ -129,7 +130,6 @@ struct thread {
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
-	struct supplemental_page_table spt;
 
 
 #endif

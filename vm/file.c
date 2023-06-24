@@ -46,7 +46,6 @@ file_backed_swap_in (struct page *page, void *kva) {
 	page_read_bytes == (int)file_read(file,page->frame->kva, page_read_bytes);
 	memset (page->frame->kva+page_read_bytes, 0, page_zero_bytes);
 	page->swap =false;
-    // memcpy (page->va, page->frame->kva,PGSIZE);
 	return true;
 
 }
@@ -60,7 +59,8 @@ file_backed_swap_out (struct page *page) {
 		file_write_at(file, page->frame->kva, file_page->read_bytes, file_page->ofs);
 	page->frame = NULL;
 	page->swap =true;
-	pml4_clear_page(page->curr->pml4, page->va);
+	// pml4_clear_page(page->curr->pml4, page->va);
+	pml4_clear_page(thread_current()->pml4, page->va);
 	return true;
 }
 
@@ -79,8 +79,7 @@ do_mmap (void *addr, size_t length, int writable,
 	void* start_addr = addr;
 	struct supplemental_page_table *spt = &thread_current()->spt;
 	enum vm_type check = VM_MARKER_MMAP;
-	struct list* mmap_list = malloc(sizeof(struct list));
-	list_init(mmap_list);
+	struct list* mmap_list;
 	while(length >0){
 		size_t page_read_bytes = length < PGSIZE ? length : PGSIZE;
 		size_t page_zero_bytes = PGSIZE-page_read_bytes;
@@ -95,7 +94,11 @@ do_mmap (void *addr, size_t length, int writable,
 			return false;
 		}
 		struct page* page = spt_find_page(spt,addr);
-		list_push_back(mmap_list,&page->mmap_elem);
+		if(check){
+			list_init(&page->mmap_list);
+			mmap_list = &page->mmap_list;
+		}
+		list_push_front(mmap_list,&page->mmap_elem);
 		
 		/* Advance. */
 		length -= page_read_bytes;
@@ -103,8 +106,6 @@ do_mmap (void *addr, size_t length, int writable,
 		offset += page_read_bytes;
 		check = 0;
 	}
-	struct page* page = spt_find_page(spt,start_addr);
-	page->mmap_list = mmap_list;
 
 	return true;
 }
@@ -113,7 +114,7 @@ do_mmap (void *addr, size_t length, int writable,
 void do_munmap(void *addr) {
     struct supplemental_page_table *spt = &thread_current()->spt;
     struct page *page = spt_find_page(spt, addr);
-    struct list *mmap_list = page->mmap_list;
+    struct list *mmap_list = &page->mmap_list;
     struct list_elem *e;
 
     struct file *file = NULL; // 파일 포인터 초기화
@@ -138,9 +139,9 @@ void do_munmap(void *addr) {
 		if(page->frame !=NULL){
 			free_frame(page->frame);
 		}
-        spt_remove_page(spt, page);
+		//dealloc 넣었음
+		spt_remove_page(spt, page);
     }
-	free(mmap_list);
     if (file != NULL) {
         file_close(file);
     }

@@ -67,7 +67,6 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 		// 가상 메모리 타입에 따라 초기화자 함수 포인터를 설정합니다.
 		int ty = VM_TYPE (type);
-		bool seg = (VM_IS_CODE(type) == VM_MARKER_CODE);
 		bool (*initializer)(struct page *, enum vm_type, void *);
 		
 		switch(ty){
@@ -82,8 +81,6 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
         uninit_new(page, upage, init, type, aux, initializer);
 
 		page->writable = writable;
-		page->seg = seg;
-		page->curr = thread_current();
 		page->swap =false;
 		 // 페이지를 보조 페이지 테이블에 삽입합니다.
         if (!spt_insert_page(spt, page)) {
@@ -217,10 +214,10 @@ vm_stack_growth (void *addr UNUSED) {
 	struct page* page = spt_find_page(&thread_current()->spt, page_addr);
 	while(page == NULL){
 		vm_alloc_page(VM_ANON, page_addr, true);
-		vm_claim_page(page_addr);
 		page_addr+= PGSIZE;
 		page = spt_find_page(&thread_current()->spt, page_addr);
 	}
+	vm_claim_page(pg_round_down(addr));
 }
 
 /* Handle the fault on write_protected page */
@@ -343,29 +340,23 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst, struct su
 
     hash_first(&i, src_hash);
     while (hash_next(&i)) {
-        struct page *src_page = hash_entry(hash_cur(&i), struct page, hash_elem);
-        
+        struct page *src_page = hash_entry(hash_cur(&i), struct page, hash_elem);   
         // Allocate and claim the page in dst
 		enum vm_type type = src_page->operations->type;
 		if(type== VM_UNINIT){
 			struct uninit_page *uninit_page = &src_page->uninit;
 			struct file_loader* file_loader = (struct file_loader*)uninit_page->aux;
 			struct file_loader* new_file_loader = malloc(sizeof(struct file_loader));
-			memcpy(new_file_loader, uninit_page->aux, sizeof(struct file_loader));
-			new_file_loader -> file = file_duplicate(file_loader->file);
-			//writable true
-			vm_alloc_page_with_initializer(uninit_page->type,src_page->va,true,uninit_page->init,new_file_loader);
-        	vm_claim_page(src_page->va);
+			memcpy(new_file_loader, file_loader, sizeof(struct file_loader));
+			new_file_loader -> file = file_reopen(file_loader->file);
+			vm_alloc_page_with_initializer(uninit_page->type,src_page->va,src_page->writable,uninit_page->init,new_file_loader);
 		}else{
         	vm_alloc_page(src_page->operations->type, src_page->va, true);
         	vm_claim_page(src_page->va);
         	memcpy(src_page->va, src_page->frame->kva,PGSIZE);
 		}
-
         // Insert the copied page into dst's supplemental page table
-
     }
-    
     return true;
 }
 
@@ -382,8 +373,8 @@ supplemental_page_table_kill (struct supplemental_page_table *spt ) {
 
 void
 supplemental_page_table_free (struct supplemental_page_table *spt ) {
-	/* TODO: Destroy all the supplemental_page_table hold by thread and
-	 * TODO: writeback all the modified contents to the storage. */
+	//TODO: Destroy all the supplemental_page_table hold by thread and
+	 //TODO: writeback all the modified contents to the storage. 
 	hash_destroy(&spt->pages, hash_action_destroy);
 }
 
@@ -394,9 +385,11 @@ void hash_action_destroy(struct hash_elem* hash_elem_, void *aux){
 		if (VM_TYPE(page->operations->type) == VM_FILE && !page->swap) {
         	struct file_page *file_page = &page->file;
 			struct file* file = file_page->file; // 파일 포인터 갱신
+			//!!TODO: dirty bit check
 			if(file)
 				file_write_at(file, page->frame->kva, file_page->read_bytes, file_page->ofs);
 		}
+		//!!TODO: mmap list 할당해제, file close
 		if(page->frame != NULL){
 			free_frame(page->frame);
 			page->frame = NULL;

@@ -83,7 +83,7 @@ anon_swap_out (struct page *page) {
 	swap_anon->use = true;
 	anon_page->swap_anon = swap_anon;
 	page->frame = NULL;
-	pml4_clear_page(page->curr->pml4, page->va);
+	pml4_clear_page(thread_current()->pml4, page->va);
 	return true;
 }
 

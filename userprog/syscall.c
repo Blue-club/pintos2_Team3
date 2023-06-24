@@ -109,7 +109,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 }
 
 
-
+// !!TODO: 없어도 되나?
 void check_address(void *addr)
 {
 	if (addr == NULL)
@@ -271,7 +271,7 @@ int read(int fd, void *buffer, unsigned size) {
 }
 
 int write(int fd, const void *buffer, unsigned size) {
-    check_address(buffer);
+    // check_address(buffer);
     struct file *file = process_get_file(fd);
 
     /* 실행된 후 쓰여진 바이트 수를 저장하는 변수 */
@@ -401,7 +401,6 @@ mmap (void *addr, size_t length, int writable, int fd, off_t offset)
     if(addr != pg_round_down(addr) ){
         return MAP_FAILED;
     }
-
     if (!do_mmap(addr, length, writable, file, offset)){
         return MAP_FAILED;
     }
@@ -414,8 +413,5 @@ void munmap(void* va){
     struct page* page = spt_find_page(&thread_current()->spt, va);
     if(page ==  NULL || page_get_type(page) != VM_FILE) return;
     if(!page->file.mmap_start) return;
-    lock_acquire(&filesys_lock);
     do_munmap(va);
-    lock_release(&filesys_lock);
-
 }
