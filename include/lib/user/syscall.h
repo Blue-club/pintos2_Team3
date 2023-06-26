@@ -7,6 +7,7 @@
 
 /* Process identifier. */
 typedef int pid_t;
+typedef int tid_t;
 #define PID_ERROR ((pid_t) -1)
 
 /* Map region identifier. */
@@ -23,7 +24,6 @@ typedef int off_t;
 /* Projects 2 and later. */
 void halt (void) NO_RETURN;
 void exit (int status) NO_RETURN;
-pid_t fork (const char *thread_name);
 int exec (const char *file);
 int wait (pid_t);
 bool create (const char *file, unsigned initial_size);
@@ -35,7 +35,14 @@ int write (int fd, const void *buffer, unsigned length);
 void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
-
+void syscall_entry(void);
+void syscall_handler(struct intr_frame *);
+void check_address(void *addr);
+int exec(const char *file_name);
+int wait(int pid);
+void process_close_file(int fd);
+struct file *process_get_file(int fd);
+int process_add_file(struct file *f);
 int dup2(int oldfd, int newfd);
 
 /* Project 3 and optionally project 4. */

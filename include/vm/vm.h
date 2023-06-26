@@ -2,6 +2,11 @@
 #define VM_VM_H
 #include <stdbool.h>
 #include "threads/palloc.h"
+#include "lib/kernel/hash.h"
+
+uint64_t hash_func (const struct hash_elem *e, void *aux);
+bool less_func (const struct hash_elem *a, const struct hash_elem *b, void *aux);
+
 
 enum vm_type {
 	/* page not initialized */
@@ -18,7 +23,9 @@ enum vm_type {
 	/* Auxillary bit flag marker for store information. You can add more
 	 * markers, until the value is fit in the int. */
 	VM_MARKER_0 = (1 << 3),
-	VM_MARKER_1 = (1 << 4),
+	VM_MARKER_MMAP = (1 << 4),
+	VM_MARKER_CODE = (1 << 5),
+
 
 	/* DO NOT EXCEED THIS VALUE. */
 	VM_MARKER_END = (1 << 31),
@@ -34,7 +41,12 @@ enum vm_type {
 struct page_operations;
 struct thread;
 
+
+
 #define VM_TYPE(type) ((type) & 7)
+#define VM_IS_STACK(type) ((type) & 8)
+#define VM_IS_MMAP(type) ((type) & 16)
+#define VM_IS_CODE(type) ((type) & 32)
 
 /* The representation of "page".
  * This is kind of "parent class", which has four "child class"es, which are
@@ -44,8 +56,13 @@ struct page {
 	const struct page_operations *operations;
 	void *va;              /* Address in terms of user space */
 	struct frame *frame;   /* Back reference for frame */
-
+	
+	struct hash_elem hash_elem;  //해시 테이블 사용하기위한 요소추가
+	struct list_elem mmap_elem;
 	/* Your implementation */
+	struct list mmap_list;
+	bool writable;
+	bool swap;
 
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
@@ -63,8 +80,16 @@ struct page {
 struct frame {
 	void *kva;
 	struct page *page;
+	struct list_elem frame_elem;
 };
 
+
+struct file_loader{
+	struct file *file;
+	size_t page_read_bytes;
+	size_t page_zero_bytes;
+	off_t ofs;
+};
 /* The function table for page operations.
  * This is one way of implementing "interface" in C.
  * Put the table of "method" into the struct's member, and
@@ -85,6 +110,8 @@ struct page_operations {
  * We don't want to force you to obey any specific design for this struct.
  * All designs up to you for this. */
 struct supplemental_page_table {
+	// 페이지 정보를 저장하는 해시 테이블
+	struct hash pages;
 };
 
 #include "threads/thread.h"
@@ -92,6 +119,7 @@ void supplemental_page_table_init (struct supplemental_page_table *spt);
 bool supplemental_page_table_copy (struct supplemental_page_table *dst,
 		struct supplemental_page_table *src);
 void supplemental_page_table_kill (struct supplemental_page_table *spt);
+void supplemental_page_table_free (struct supplemental_page_table *spt ); 
 struct page *spt_find_page (struct supplemental_page_table *spt,
 		void *va);
 bool spt_insert_page (struct supplemental_page_table *spt, struct page *page);

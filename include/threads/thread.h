@@ -5,6 +5,8 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+#include "threads/synch.h"
+
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -21,6 +23,7 @@ enum thread_status {
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
 typedef int tid_t;
+typedef int pid_t;
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
 
 /* Thread priorities. */
@@ -28,6 +31,9 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+
+#define FDT_PAGES 3
+#define FDCOUNT_LIMIT 128 // limit fdidx
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The
@@ -94,14 +100,38 @@ struct thread {
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
+	/* wakeup tick : 깨어나야 할 시각 */
+	int64_t wakeup_tick;
+	/* priority 초기화위한 필드, 우선 순위 기부받고 반납할 때 자신의 우선순위를 알아야함*/
+	int init_priority;
+	/* 쓰레드가 대기하고있는 lock 필드  */
+	struct lock *wait_lock;
+	/* multiple donation 리스트 및 elem*/
+	struct list donation;
+	struct list_elem donation_elem;
+	int exit_status;  // exit() 또는 wait() 구현에 사용되는 변수
+	struct file **fdt;  // 파일 디스크립터 테이블
+	int fdidx;  // 파일 디스크립터 인덱스
+	struct intr_frame parent_if;
+	struct list child_list; 
+    struct list_elem child_elem; 
+
+	struct semaphore load_sema;
+	struct semaphore exit_sema; 
+	struct semaphore wait_sema;  
+	struct file *running;
+	uint64_t *pml4;                     /* Page map level 4 */
+	void *rsp;
+	struct supplemental_page_table spt;
+
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
-	uint64_t *pml4;                     /* Page map level 4 */
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
-	struct supplemental_page_table spt;
+
+
 #endif
 
 	/* Owned by thread.c. */
@@ -132,9 +162,11 @@ const char *thread_name (void);
 
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
-
+bool thread_compare_donate_priority (const struct list_elem *, 
+				const struct list_elem *, void *);
 int thread_get_priority (void);
 void thread_set_priority (int);
+void donate_priority(void);
 
 int thread_get_nice (void);
 void thread_set_nice (int);
@@ -142,5 +174,8 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
-
+void test_max_priority (void);
+bool cmp_priority (const struct list_elem *, const struct list_elem *, void *);
+void remove_with_lock (struct lock *lock);
+void refresh_priority (void);
 #endif /* threads/thread.h */

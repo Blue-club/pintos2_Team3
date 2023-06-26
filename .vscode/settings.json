@@ -1,0 +1,19 @@
+{
+    "files.associations": {
+        "intr-stubs.h": "c",
+        "*.inc": "c",
+        "synch.h": "c",
+        "thread.h": "c",
+        "vm.h": "c",
+        "disk.h": "c",
+        "mmu.h": "c",
+        "debug.h": "c",
+        "file.h": "c",
+        "intrinsic.h": "c",
+        "directory.h": "c",
+        "palloc.h": "c",
+        "pte.h": "c",
+        "filesys.h": "c",
+        "inttypes.h": "c"
+    }
+}

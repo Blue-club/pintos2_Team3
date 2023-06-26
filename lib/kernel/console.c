@@ -139,12 +139,14 @@ puts (const char *s) {
 }
 
 /* Writes the N characters in BUFFER to the console. */
-void
-putbuf (const char *buffer, size_t n) {
-	acquire_console ();
-	while (n-- > 0)
-		putchar_have_lock (*buffer++);
-	release_console ();
+void putbuf(const char *buffer, size_t n) {
+    acquire_console();  // 콘솔 잠금을 획득합니다. 다른 프로세스가 동시에 쓰기를 수행하지 않도록 합니다.
+
+    while (n-- > 0) {
+        putchar_have_lock(*buffer++);  // 버퍼의 내용을 한 글자씩 콘솔에 출력합니다.
+    }
+
+    release_console();  // 콘솔 잠금을 해제합니다.
 }
 
 /* Writes C to the vga display and serial port. */
