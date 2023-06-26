@@ -55,11 +55,12 @@ static bool
 file_backed_swap_out (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
 	struct file* file = file_page->file; // 파일 포인터 갱신
-	if(file)
+	if(file && pml4_is_dirty(thread_current()->pml4, page->va)){
 		file_write_at(file, page->frame->kva, file_page->read_bytes, file_page->ofs);
+		pml4_set_dirty(thread_current()->pml4,page->va,0);
+	}
 	page->frame = NULL;
 	page->swap =true;
-	// pml4_clear_page(page->curr->pml4, page->va);
 	pml4_clear_page(thread_current()->pml4, page->va);
 	return true;
 }
@@ -118,7 +119,7 @@ void do_munmap(void *addr) {
     struct list_elem *e;
 
     struct file *file = NULL; // 파일 포인터 초기화
-    for (e = list_begin(mmap_list); e != list_end(mmap_list); ) {
+    for (e = list_begin(mmap_list); e != list_end(mmap_list);) {
         page = list_entry(e, struct page, mmap_elem);
         if (VM_TYPE(page->operations->type) == VM_UNINIT) {
 			e = list_remove(e);
@@ -126,7 +127,7 @@ void do_munmap(void *addr) {
             continue;
         }
 		if(!pml4_is_dirty(thread_current()->pml4, page->va)){
-			e = list_remove(e);
+			e = list_remove(e);			
 			continue;
 		}
         struct file_page *file_page = &page->file;

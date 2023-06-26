@@ -555,10 +555,8 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
-
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
-
 	success = true;
 
 done:
@@ -748,20 +746,16 @@ lazy_load_segment (struct page *page, void *aux) {
 	uint32_t page_read_bytes = file_loader->page_read_bytes;
 	uint32_t page_zero_bytes = file_loader->page_zero_bytes;
 	
-
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
-	file_seek(file,ofs);
-	if(file_read(file,page->frame->kva,page_read_bytes) != (int)page_read_bytes){
-		palloc_free_page(page->frame->kva);
-		
+	if(file_read_at(file, page->frame->kva, page_read_bytes, ofs) != (int)page_read_bytes){
+		free_frame(page->frame);
+		free(file_loader);
 		return false;
 	}
 	memset (page->frame->kva + page_read_bytes, 0, page_zero_bytes);
-    memcpy (page->va, page->frame->kva, PGSIZE);
-	// free(file_loader);
+	// free(file_loader); -> page-merge-par 수정
 
-	
 	return true;
 }
 
@@ -792,7 +786,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		 * and zero the final PAGE_ZERO_BYTES bytes. */
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
 		struct file_loader *file_loader = malloc(sizeof(struct file_loader));
 		file_loader->page_read_bytes = page_read_bytes;
@@ -804,8 +797,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 			free(file_loader);
 			return false;
 		}
-		
-		
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
@@ -819,12 +810,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 static bool setup_stack(struct intr_frame *if_) {
     bool success = false;
     void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
-		
 	
-	if(!vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom,true)){
+	if(!vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom, true)){
 		return false;
 	}
-	
 	if (!vm_claim_page(stack_bottom)) {
 		vm_dealloc_page(stack_bottom);
 		return false;

@@ -52,7 +52,7 @@ syscall_init (void) {
 /* The main system call interface */
 void
 syscall_handler (struct intr_frame *f UNUSED) {
-
+    thread_current()->rsp = f->rsp;
 	/* rax = 시스템 콜 넘버 */
 	int syscall_n = f->R.rax; /* 시스템 콜 넘버 */
 	switch (syscall_n)
@@ -154,15 +154,20 @@ bool remove (const char *file){
 int open(const char *file_name)
 {
     check_address(file_name); // 주소 유효성 검사를 수행합니다.
+    lock_acquire(&filesys_lock);
     struct file *file = filesys_open(file_name); // 파일 시스템에서 파일을 엽니다.
 
     if (file == NULL) // 파일 열기에 실패한 경우
+    {
+        lock_release(&filesys_lock);
         return -1; // 오류를 나타내기 위해 -1을 반환합니다.
-
+    }
     int fd = process_add_file(file); // 현재 프로세스에 파일을 추가하고 파일 디스크립터(fd)를 얻습니다.
 
     if (fd == -1) // 파일을 추가하는 데 실패한 경우
         file_close(file); // 열었던 파일을 닫습니다.
+    
+    lock_release(&filesys_lock);
     return fd; // 파일 디스크립터(fd)를 반환합니다.
 }
 

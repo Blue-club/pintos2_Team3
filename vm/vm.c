@@ -79,7 +79,6 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		}
 		// uninit_new 함수를 호출하여 페이지를 초기화합니다.
         uninit_new(page, upage, init, type, aux, initializer);
-
 		page->writable = writable;
 		page->swap =false;
 		 // 페이지를 보조 페이지 테이블에 삽입합니다.
@@ -137,7 +136,6 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 	int succ = false;
 	// 페이지를 해시 테이블에 삽입
 	struct hash_elem *elem = hash_insert(&spt->pages, &page->hash_elem);
-
 	// hash_insert함수는 성공하면 NULL반환
 	if (elem == NULL)
 		succ = true;
@@ -210,14 +208,15 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static void
 vm_stack_growth (void *addr UNUSED) {
-	void* page_addr=pg_round_down(addr);
+	void* page_addr=addr;
 	struct page* page = spt_find_page(&thread_current()->spt, page_addr);
 	while(page == NULL){
 		vm_alloc_page(VM_ANON, page_addr, true);
 		page_addr+= PGSIZE;
 		page = spt_find_page(&thread_current()->spt, page_addr);
 	}
-	vm_claim_page(pg_round_down(addr));
+		vm_claim_page(addr);
+
 }
 
 /* Handle the fault on write_protected page */
@@ -234,15 +233,19 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
 	page = spt_find_page(spt, addr);
+	if(user)
+		thread_current()->rsp = f->rsp;
 	
 	if(page != NULL){
-		// printf("%p, %d, %d\n" ,addr, page->writable, write);
 		if(!write || page->writable){
 			return vm_do_claim_page (page);
 		} 
 	}
 	else if(USER_STACK >= addr && addr >= USER_STACK - (1<<20) && addr == thread_current()->rsp-8){
-		vm_stack_growth(addr);
+		vm_stack_growth(pg_round_down(addr));
+		return true;
+	}else if(USER_STACK >= addr && addr >= USER_STACK - (1<<20) && addr >= thread_current()->rsp){
+		vm_stack_growth(pg_round_down(addr));
 		return true;
 	}
 	return false;
@@ -348,12 +351,11 @@ bool supplemental_page_table_copy(struct supplemental_page_table *dst, struct su
 			struct file_loader* file_loader = (struct file_loader*)uninit_page->aux;
 			struct file_loader* new_file_loader = malloc(sizeof(struct file_loader));
 			memcpy(new_file_loader, file_loader, sizeof(struct file_loader));
-			new_file_loader -> file = file_reopen(file_loader->file);
 			vm_alloc_page_with_initializer(uninit_page->type,src_page->va,src_page->writable,uninit_page->init,new_file_loader);
 		}else{
         	vm_alloc_page(src_page->operations->type, src_page->va, true);
         	vm_claim_page(src_page->va);
-        	memcpy(src_page->va, src_page->frame->kva,PGSIZE);
+        	memcpy(src_page->va, src_page->frame->kva, PGSIZE);
 		}
         // Insert the copied page into dst's supplemental page table
     }
@@ -389,12 +391,11 @@ void hash_action_destroy(struct hash_elem* hash_elem_, void *aux){
 			if(file)
 				file_write_at(file, page->frame->kva, file_page->read_bytes, file_page->ofs);
 		}
-		//!!TODO: mmap list 할당해제, file close
+		//!!TODO: file close
 		if(page->frame != NULL){
 			free_frame(page->frame);
 			page->frame = NULL;
 		}
-
 	   	vm_dealloc_page(page);
 	}
 }
